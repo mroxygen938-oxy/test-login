@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { IconImage, IconStar, IconX } from '../lib/icons.jsx'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { IconImage, IconPlus, IconStar, IconTrash, IconX } from '../lib/icons.jsx'
 import { getLists, getModeConfig } from '../lib/lists.js'
 
 const emptyItem = (mode) => ({
@@ -12,6 +12,14 @@ const emptyItem = (mode) => ({
   studio: '',
   rating: 0,
   notes: '',
+  seasons: [],
+})
+
+const newSeason = (i) => ({
+  id: `sn_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+  name: `Season ${i}`,
+  total: '',
+  watched: 0,
 })
 
 async function fileToDataUrl(file, maxDim = 800) {
@@ -60,7 +68,11 @@ export default function AnimeModal({ open, initial, mediaMode = 'anime', onClose
 function AnimeModalInner({ initial, mediaMode, onClose, onSave }) {
   const config = getModeConfig(mediaMode)
   const lists = getLists(mediaMode)
-  const [form, setForm] = useState(() => ({ ...emptyItem(mediaMode), ...(initial || {}) }))
+  const [form, setForm] = useState(() => ({
+    ...emptyItem(mediaMode),
+    ...(initial || {}),
+    seasons: Array.isArray(initial?.seasons) ? initial.seasons : [],
+  }))
   const firstFieldRef = useRef(null)
 
   useEffect(() => {
@@ -76,8 +88,39 @@ function AnimeModalInner({ initial, mediaMode, onClose, onSave }) {
   }, [onClose])
 
   const isEditing = Boolean(initial?.id)
+  const showSeasons = mediaMode === 'anime'
+  const hasSeasons = showSeasons && form.seasons.length > 0
 
   const update = (patch) => setForm((f) => ({ ...f, ...patch }))
+
+  const updateSeason = (id, patch) =>
+    setForm((f) => ({
+      ...f,
+      seasons: f.seasons.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    }))
+
+  const addSeason = () =>
+    setForm((f) => ({
+      ...f,
+      seasons: [...f.seasons, newSeason(f.seasons.length + 1)],
+    }))
+
+  const removeSeason = (id) =>
+    setForm((f) => ({ ...f, seasons: f.seasons.filter((s) => s.id !== id) }))
+
+  /* Sums when in seasons mode — used to display derived totals and to
+     normalise the saved item so the rest of the app keeps working
+     against totalEpisodes / watchedEpisodes. */
+  const sums = useMemo(() => {
+    if (!hasSeasons) return null
+    let total = 0
+    let watched = 0
+    for (const s of form.seasons) {
+      total += Math.max(0, Math.floor(Number(s.total) || 0))
+      watched += Math.max(0, Math.floor(Number(s.watched) || 0))
+    }
+    return { total, watched }
+  }, [hasSeasons, form.seasons])
 
   const handleFile = async (file) => {
     if (!file) return
@@ -92,14 +135,42 @@ function AnimeModalInner({ initial, mediaMode, onClose, onSave }) {
       firstFieldRef.current?.focus()
       return
     }
-    const total = form.totalEpisodes === '' ? 0 : Number(form.totalEpisodes)
-    const watched = Number(form.watchedEpisodes) || 0
+
+    let total
+    let watched
+    let seasons = form.seasons
+
+    if (hasSeasons) {
+      seasons = form.seasons.map((s, i) => ({
+        id: s.id,
+        name: (s.name || '').trim() || `Season ${i + 1}`,
+        total: Math.max(0, Math.floor(Number(s.total) || 0)),
+        watched: Math.max(
+          0,
+          Math.min(
+            Math.floor(Number(s.watched) || 0),
+            (Number(s.total) || 0) > 0
+              ? Math.floor(Number(s.total))
+              : Number.POSITIVE_INFINITY
+          )
+        ),
+      }))
+      total = seasons.reduce((acc, s) => acc + s.total, 0)
+      watched = seasons.reduce((acc, s) => acc + s.watched, 0)
+    } else {
+      seasons = []
+      const t = form.totalEpisodes === '' ? 0 : Number(form.totalEpisodes)
+      total = Number.isFinite(t) ? Math.max(0, Math.floor(t)) : 0
+      watched = Math.max(0, Math.floor(Number(form.watchedEpisodes) || 0))
+    }
+
     onSave({
       ...form,
       title,
-      totalEpisodes: Number.isFinite(total) ? Math.max(0, Math.floor(total)) : 0,
-      watchedEpisodes: Math.max(0, Math.floor(watched)),
+      totalEpisodes: total,
+      watchedEpisodes: watched,
       rating: Number(form.rating) || 0,
+      seasons,
     })
   }
 
@@ -215,8 +286,10 @@ function AnimeModalInner({ initial, mediaMode, onClose, onSave }) {
                 className="input"
                 type="number"
                 min="0"
-                value={form.watchedEpisodes}
+                value={hasSeasons ? sums.watched : form.watchedEpisodes}
                 onChange={(e) => update({ watchedEpisodes: e.target.value })}
+                disabled={hasSeasons}
+                title={hasSeasons ? 'Sum of all seasons' : ''}
               />
             </div>
             <div className="field">
@@ -227,11 +300,96 @@ function AnimeModalInner({ initial, mediaMode, onClose, onSave }) {
                 type="number"
                 min="0"
                 placeholder="Leave empty if unknown"
-                value={form.totalEpisodes}
+                value={hasSeasons ? sums.total : form.totalEpisodes}
                 onChange={(e) => update({ totalEpisodes: e.target.value })}
+                disabled={hasSeasons}
+                title={hasSeasons ? 'Sum of all seasons' : ''}
               />
             </div>
           </div>
+
+          {showSeasons && (
+            <div className="field seasons">
+              <div className="seasons-head">
+                <span className="label" style={{ marginBottom: 0 }}>
+                  Seasons
+                  {hasSeasons && (
+                    <span className="seasons-summary">
+                      {' · '}
+                      {sums.watched} / {sums.total} episodes
+                    </span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-ghost seasons-add"
+                  onClick={addSeason}
+                >
+                  <IconPlus />
+                  <span>Add season</span>
+                </button>
+              </div>
+
+              {hasSeasons ? (
+                <ul className="seasons-list">
+                  {form.seasons.map((s, i) => (
+                    <li key={s.id} className="season-row">
+                      <span className="season-num" aria-hidden="true">
+                        {i + 1}
+                      </span>
+                      <input
+                        type="text"
+                        className="input season-name"
+                        value={s.name}
+                        onChange={(e) =>
+                          updateSeason(s.id, { name: e.target.value })
+                        }
+                        placeholder={`Season ${i + 1}`}
+                        aria-label={`Season ${i + 1} name`}
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        className="input season-watched"
+                        value={s.watched}
+                        onChange={(e) =>
+                          updateSeason(s.id, { watched: e.target.value })
+                        }
+                        aria-label={`Season ${i + 1} episodes watched`}
+                      />
+                      <span className="season-sep" aria-hidden="true">
+                        /
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        className="input season-total"
+                        value={s.total}
+                        onChange={(e) =>
+                          updateSeason(s.id, { total: e.target.value })
+                        }
+                        placeholder="—"
+                        aria-label={`Season ${i + 1} total episodes`}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-icon btn-ghost season-remove"
+                        onClick={() => removeSeason(s.id)}
+                        aria-label={`Remove ${s.name || `Season ${i + 1}`}`}
+                      >
+                        <IconTrash />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="seasons-hint">
+                  Tracking multi-season anime? Add a season for each cour and
+                  the totals above will sum automatically.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="field-row">
             <div className="field">

@@ -1413,6 +1413,154 @@ html[data-theme='light'] .btn-ghost:hover {
   min-height: 80px;
 }
 
+.input:disabled,
+.textarea:disabled,
+.select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Seasons */
+.seasons {
+  gap: 10px;
+}
+
+.seasons-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.seasons-summary {
+  font-weight: 600;
+  color: var(--fg-2);
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.seasons-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 999px;
+}
+
+.seasons-add svg {
+  width: 14px;
+  height: 14px;
+}
+
+.seasons-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--fg-3);
+  line-height: 1.5;
+}
+
+.seasons-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.season-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1.6fr) 70px 10px 70px auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: var(--glass-inner);
+  border: 1px solid var(--glass-border);
+}
+
+.season-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-a) 22%, transparent);
+  color: var(--fg-1);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.season-row .input {
+  padding: 8px 10px;
+  font-size: 13px;
+  background: transparent;
+}
+
+.season-row .season-watched,
+.season-row .season-total {
+  text-align: center;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.season-row .season-watched::-webkit-outer-spin-button,
+.season-row .season-watched::-webkit-inner-spin-button,
+.season-row .season-total::-webkit-outer-spin-button,
+.season-row .season-total::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.season-sep {
+  text-align: center;
+  color: var(--fg-3);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.season-remove {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+.season-remove svg {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 480px) {
+  .season-row {
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    grid-template-areas:
+      'num name remove'
+      'watched sep total';
+    row-gap: 6px;
+  }
+  .season-num {
+    grid-area: num;
+  }
+  .season-row .season-name {
+    grid-area: name;
+  }
+  .season-remove {
+    grid-area: remove;
+  }
+  .season-row .season-watched {
+    grid-area: watched;
+  }
+  .season-sep {
+    grid-area: sep;
+  }
+  .season-row .season-total {
+    grid-area: total;
+  }
+}
+
 .select {
   appearance: none;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' d='M1 1l5 5 5-5'/></svg>");

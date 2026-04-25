@@ -387,17 +387,41 @@ function Vault({ user }) {
       setItems((a) =>
         a.map((x) => {
           if (x.id !== anime.id) return x
-          const total = Number(x.totalEpisodes) || 0
-          const next = Number(x.watchedEpisodes || 0) + 1
-          const clamped = total > 0 ? Math.min(next, total) : next
-          const patch = { watchedEpisodes: clamped }
+          let seasons = Array.isArray(x.seasons) ? x.seasons : []
+          let total = Number(x.totalEpisodes) || 0
+          let watched = Number(x.watchedEpisodes || 0)
+
+          if (seasons.length > 0) {
+            let bumped = false
+            seasons = seasons.map((s) => {
+              if (bumped) return s
+              const sTotal = Number(s.total) || 0
+              const sWatched = Number(s.watched) || 0
+              if (sTotal === 0 || sWatched < sTotal) {
+                bumped = true
+                return { ...s, watched: sWatched + 1 }
+              }
+              return s
+            })
+            if (!bumped) return x
+            total = seasons.reduce((acc, s) => acc + (Number(s.total) || 0), 0)
+            watched = seasons.reduce(
+              (acc, s) => acc + (Number(s.watched) || 0),
+              0
+            )
+          } else {
+            const next = watched + 1
+            watched = total > 0 ? Math.min(next, total) : next
+          }
+
+          const patch = { watchedEpisodes: watched, totalEpisodes: total, seasons }
           if (
             total > 0 &&
-            clamped >= total &&
+            watched >= total &&
             x.list !== config.completedList
           ) {
             patch.list = config.completedList
-          } else if (clamped > 0 && x.list === config.planList) {
+          } else if (watched > 0 && x.list === config.planList) {
             patch.list = config.activeReadingList
           }
           return { ...x, ...patch }
@@ -412,8 +436,36 @@ function Vault({ user }) {
       setItems((a) =>
         a.map((x) => {
           if (x.id !== anime.id) return x
-          const next = Math.max(0, Number(x.watchedEpisodes || 0) - 1)
-          return { ...x, watchedEpisodes: next }
+          let seasons = Array.isArray(x.seasons) ? x.seasons : []
+          let total = Number(x.totalEpisodes) || 0
+          let watched = Math.max(0, Number(x.watchedEpisodes || 0) - 1)
+
+          if (seasons.length > 0) {
+            let dropped = false
+            const reversed = [...seasons].reverse().map((s) => {
+              if (dropped) return s
+              const sWatched = Number(s.watched) || 0
+              if (sWatched > 0) {
+                dropped = true
+                return { ...s, watched: sWatched - 1 }
+              }
+              return s
+            })
+            if (!dropped) return x
+            seasons = reversed.reverse()
+            total = seasons.reduce((acc, s) => acc + (Number(s.total) || 0), 0)
+            watched = seasons.reduce(
+              (acc, s) => acc + (Number(s.watched) || 0),
+              0
+            )
+          }
+
+          return {
+            ...x,
+            watchedEpisodes: watched,
+            totalEpisodes: total,
+            seasons,
+          }
         })
       )
     },

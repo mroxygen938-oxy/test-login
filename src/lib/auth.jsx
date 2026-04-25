@@ -27,12 +27,32 @@ const AuthCtx = createContext(null)
    needs a small server. For a localStorage-only app this is the
    standard client-side check. */
 function isValidTelegramPayload(p) {
-  if (!p || typeof p !== 'object') return false
-  if (typeof p.id !== 'number' && typeof p.id !== 'string') return false
-  if (!p.id) return false
-  if (typeof p.auth_date !== 'number') return false
-  const ageSec = Math.floor(Date.now() / 1000) - p.auth_date
-  if (ageSec < 0 || ageSec > MAX_AUTH_AGE_SECONDS) return false
+  if (!p || typeof p !== 'object') {
+    console.warn('TG payload rejected: not an object', p)
+    return false
+  }
+  const idOk =
+    (typeof p.id === 'number' && p.id !== 0) ||
+    (typeof p.id === 'string' && p.id.length > 0)
+  if (!idOk) {
+    console.warn('TG payload rejected: bad id', p.id)
+    return false
+  }
+  const authDateNum =
+    typeof p.auth_date === 'number'
+      ? p.auth_date
+      : parseInt(p.auth_date, 10)
+  if (!Number.isFinite(authDateNum) || authDateNum <= 0) {
+    console.warn('TG payload rejected: bad auth_date', p.auth_date)
+    return false
+  }
+  /* Allow up to 5 min of clock skew on the negative side (client clock
+     ahead of Telegram). Reject anything older than 24 h. */
+  const ageSec = Math.floor(Date.now() / 1000) - authDateNum
+  if (ageSec < -300 || ageSec > MAX_AUTH_AGE_SECONDS) {
+    console.warn('TG payload rejected: stale auth_date', { ageSec })
+    return false
+  }
   return true
 }
 

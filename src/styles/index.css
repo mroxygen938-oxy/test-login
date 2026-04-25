@@ -805,15 +805,15 @@ html[data-theme='light'] .theme-toggle .pill {
 }
 
 /* Light-mode hover overrides: in light theme the default hover values
-   (whiter background, near-white border) wash the buttons out. Use a
-   subtle accent tint and a visible border instead so hover stays
-   readable. */
-html[data-theme='light'] .btn {
+   (whiter background, near-white border) wash the *secondary* buttons
+   out. Scope these rules with :not(.btn-primary) so the primary pink
+   gradient pill is untouched. */
+html[data-theme='light'] .btn:not(.btn-primary) {
   background: rgba(255, 255, 255, 0.7);
   border-color: rgba(20, 20, 50, 0.1);
 }
 
-html[data-theme='light'] .btn:hover {
+html[data-theme='light'] .btn:not(.btn-primary):hover {
   background: rgba(245, 240, 255, 0.95);
   border-color: rgba(20, 20, 50, 0.16);
   box-shadow:
@@ -830,10 +830,6 @@ html[data-theme='light'] .btn-ghost:hover {
   background: rgba(20, 20, 50, 0.06);
   border-color: rgba(20, 20, 50, 0.1);
   box-shadow: 0 4px 14px rgba(50, 30, 120, 0.08);
-}
-
-html[data-theme='light'] .btn-primary:hover {
-  filter: brightness(1.02) saturate(1.06);
 }
 
 /* ---------- Hero / list header ---------- */

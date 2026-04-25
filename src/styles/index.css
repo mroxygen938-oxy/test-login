@@ -2586,3 +2586,14 @@ html[data-theme='light'] .theme-toggle .pill {
     padding: 4px;
   }
 }
+
+.login-error {
+  margin-top: 4px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, #ef4444 14%, transparent);
+  border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
+  color: color-mix(in srgb, #ef4444 95%, white);
+  font-size: 13px;
+  line-height: 1.45;
+}

@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { GOOGLE_CLIENT_ID, useAuth } from '../lib/auth.jsx'
 
-/* Multi-color official Google "G" (used on a dark surface so we keep
-   Google's brand colors instead of their default white-circle wrapper). */
+/* Multi-color official Google "G" rendered directly on the dark
+   surface so we keep the brand colors without Google's white plate. */
 function GoogleGIcon() {
   return (
     <svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true">
@@ -26,28 +26,28 @@ function GoogleGIcon() {
   )
 }
 
-/* Renders our fully styled "Continue with Google" button. The
-   official GSI button is rendered hidden in the same wrapper and
-   we forward the click event to it on press, so we get GSI's full
-   credential flow without any white branding chrome. */
+const USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo'
+
 export default function LoginScreen() {
   const { login } = useAuth()
-  const hiddenBtnRef = useRef(null)
+  const tokenClientRef = useRef(null)
   const [gsiReady, setGsiReady] = useState(
-    typeof window !== 'undefined' && Boolean(window.google?.accounts?.id)
+    typeof window !== 'undefined' && Boolean(window.google?.accounts?.oauth2)
   )
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
 
+  /* Wait for the GSI script to finish loading. */
   useEffect(() => {
     if (gsiReady) return undefined
     let cancelled = false
     const t = setInterval(() => {
       if (cancelled) return
-      if (window.google?.accounts?.id) {
+      if (window.google?.accounts?.oauth2) {
         setGsiReady(true)
         clearInterval(t)
       }
     }, 100)
-    /* Give up after 8s — likely network/script-block. */
     const timeout = setTimeout(() => clearInterval(t), 8000)
     return () => {
       cancelled = true
@@ -56,44 +56,61 @@ export default function LoginScreen() {
     }
   }, [gsiReady])
 
+  /* Build the OAuth2 token client once GSI is loaded. */
   useEffect(() => {
-    if (!gsiReady) return undefined
-    if (!hiddenBtnRef.current) return undefined
-    const id = window.google.accounts.id
-    /* One Tap disabled deliberately: it renders a non-themable white
-       card in the corner. Auto-login is handled via our own
-       persisted session in localStorage instead. */
-    id.initialize({
+    if (!gsiReady) return
+    tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
-      callback: ({ credential }) => credential && login(credential),
-      auto_select: false,
-      cancel_on_tap_outside: true,
-      ux_mode: 'popup',
-      use_fedcm_for_prompt: false,
+      scope: 'openid email profile',
+      callback: async (response) => {
+        if (response.error) {
+          setBusy(false)
+          setError('Sign-in was cancelled.')
+          return
+        }
+        if (!response.access_token) {
+          setBusy(false)
+          setError('Could not get an access token from Google.')
+          return
+        }
+        try {
+          const res = await fetch(USERINFO_URL, {
+            headers: { Authorization: `Bearer ${response.access_token}` },
+          })
+          if (!res.ok) {
+            throw new Error(`userinfo ${res.status}`)
+          }
+          const profile = await res.json()
+          const ok = login(profile)
+          if (!ok) {
+            setError('Google response was missing required fields.')
+          }
+        } catch {
+          setError('Could not load your Google profile. Please try again.')
+        } finally {
+          setBusy(false)
+        }
+      },
+      error_callback: () => {
+        setBusy(false)
+        setError('Sign-in was cancelled.')
+      },
     })
-    hiddenBtnRef.current.innerHTML = ''
-    id.renderButton(hiddenBtnRef.current, {
-      type: 'standard',
-      theme: 'filled_black',
-      size: 'large',
-      shape: 'pill',
-      text: 'continue_with',
-      logo_alignment: 'left',
-      width: 280,
-    })
-    return undefined
   }, [gsiReady, login])
 
-  /* Forward a real user click to the hidden GSI button so the
-     credential popup is treated as user-initiated. */
-  const triggerGoogle = useCallback(() => {
-    if (!gsiReady || !hiddenBtnRef.current) return
-    const target =
-      hiddenBtnRef.current.querySelector('[role="button"]') ||
-      hiddenBtnRef.current.querySelector('div[tabindex]') ||
-      hiddenBtnRef.current.firstElementChild
-    if (target instanceof HTMLElement) target.click()
-  }, [gsiReady])
+  const handleClick = () => {
+    if (!gsiReady || !tokenClientRef.current || busy) return
+    setError('')
+    setBusy(true)
+    try {
+      tokenClientRef.current.requestAccessToken({ prompt: 'consent' })
+    } catch {
+      setBusy(false)
+      setError('Could not open the Google sign-in popup.')
+    }
+  }
+
+  const disabled = !gsiReady || busy
 
   return (
     <div className="login-root">
@@ -130,19 +147,28 @@ export default function LoginScreen() {
           <button
             type="button"
             className="login-google-btn-custom"
-            onClick={triggerGoogle}
-            disabled={!gsiReady}
+            onClick={handleClick}
+            disabled={disabled}
             aria-label="Continue with Google"
           >
             <span className="login-google-icon">
               <GoogleGIcon />
             </span>
             <span className="login-google-label">
-              {gsiReady ? 'Continue with Google' : 'Loading Google…'}
+              {busy
+                ? 'Signing you in…'
+                : gsiReady
+                  ? 'Continue with Google'
+                  : 'Loading Google…'}
             </span>
           </button>
-          <div ref={hiddenBtnRef} className="login-google-hidden" aria-hidden="true" />
         </div>
+
+        {error && (
+          <div className="login-error" role="alert">
+            {error}
+          </div>
+        )}
 
         <ul className="login-features" aria-label="What you get">
           <li>

@@ -804,6 +804,38 @@ html[data-theme='light'] .theme-toggle .pill {
   margin: 0;
 }
 
+/* Light-mode hover overrides: in light theme the default hover values
+   (whiter background, near-white border) wash the buttons out. Use a
+   subtle accent tint and a visible border instead so hover stays
+   readable. */
+html[data-theme='light'] .btn {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(20, 20, 50, 0.1);
+}
+
+html[data-theme='light'] .btn:hover {
+  background: rgba(245, 240, 255, 0.95);
+  border-color: rgba(20, 20, 50, 0.16);
+  box-shadow:
+    0 6px 18px rgba(50, 30, 120, 0.1),
+    0 1px 0 rgba(20, 20, 50, 0.04);
+}
+
+html[data-theme='light'] .btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+html[data-theme='light'] .btn-ghost:hover {
+  background: rgba(20, 20, 50, 0.06);
+  border-color: rgba(20, 20, 50, 0.1);
+  box-shadow: 0 4px 14px rgba(50, 30, 120, 0.08);
+}
+
+html[data-theme='light'] .btn-primary:hover {
+  filter: brightness(1.02) saturate(1.06);
+}
+
 /* ---------- Hero / list header ---------- */
 .list-header {
   display: flex;
@@ -2367,8 +2399,23 @@ html[data-theme='light'] .theme-toggle .pill {
     0 0 32px color-mix(in srgb, var(--accent-a) 20%, transparent);
 }
 
+[data-theme='light'] .login-tg-btn:hover:not(:disabled) {
+  --g-bg-1: #ffffff;
+  --g-bg-2: #ece9f8;
+  border-color: rgba(20, 20, 50, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.05),
+    0 12px 28px rgba(50, 30, 120, 0.14),
+    0 0 0 1px color-mix(in srgb, var(--accent-a) 18%, transparent);
+}
+
 .login-tg-btn:hover:not(:disabled)::before {
   opacity: 1;
+}
+
+[data-theme='light'] .login-tg-btn:hover:not(:disabled)::before {
+  opacity: 0.55;
 }
 
 .login-tg-btn:active:not(:disabled) {

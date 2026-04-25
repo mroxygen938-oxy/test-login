@@ -9,8 +9,8 @@ import { createContext, useCallback, useContext, useMemo, useState } from 'react
    Get the numeric ID by messaging @username_to_id_bot, or use the
    number before the colon in your bot token from BotFather.
    ──────────────────────────────────────────────────────────────────── */
-export const TELEGRAM_BOT_USERNAME = 'YOUR_BOT_USERNAME_HERE'
-export const TELEGRAM_BOT_ID = 0 // e.g. 1234567890
+export const TELEGRAM_BOT_USERNAME = 'OxygenVaultbot'
+export const TELEGRAM_BOT_ID = 8770550259
 
 /* Max age of a Telegram auth payload we'll trust (24 h, as Telegram
    recommends). Older payloads are rejected on the assumption they were

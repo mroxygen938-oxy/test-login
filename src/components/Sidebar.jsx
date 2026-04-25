@@ -20,19 +20,10 @@ export default function Sidebar({
     <aside className="sidebar glass" role="navigation" aria-label="Lists navigation">
       <div className="brand">
         <div className="brand-logo" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path
-              d="M5 18L12 4l7 14H5z"
-              fill="white"
-              stroke="white"
-              strokeWidth="1.6"
-              strokeLinejoin="round"
-            />
-            <circle cx="12" cy="15" r="1.8" fill="#0b0b14" />
-          </svg>
+          <img src="/logo.png" alt="" width="42" height="42" />
         </div>
         <div>
-          <div className="brand-title">Otaku Vault</div>
+          <div className="brand-title">Oxygen Vault</div>
           <div className="brand-subtitle">{sectionTitle}</div>
         </div>
         {onClose && (

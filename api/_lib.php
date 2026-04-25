@@ -1,5 +1,5 @@
 <?php
-/* Shared helpers for the Otaku Vault sync API.
+/* Shared helpers for the Oxygen Vault sync API.
    This file is included by every endpoint and must NEVER be requested
    directly. The sibling `.htaccess` blocks direct access. */
 

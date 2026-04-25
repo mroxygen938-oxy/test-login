@@ -133,20 +133,11 @@ export default function LoginScreen() {
 
       <div className="login-card glass-strong">
         <div className="login-brand">
-          <div className="brand-logo" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M5 18L12 4l7 14H5z"
-                fill="white"
-                stroke="white"
-                strokeWidth="1.6"
-                strokeLinejoin="round"
-              />
-              <circle cx="12" cy="15" r="1.8" fill="#0b0b14" />
-            </svg>
+          <div className="brand-logo brand-logo-lg" aria-hidden="true">
+            <img src="/logo.png" alt="" width="56" height="56" />
           </div>
           <div className="login-brand-text">
-            <div className="login-brand-title">Otaku Vault</div>
+            <div className="login-brand-title">Oxygen Vault</div>
             <div className="login-brand-sub">Your private anime &amp; manga library</div>
           </div>
         </div>

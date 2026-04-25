@@ -1,7 +1,7 @@
-# Otaku Vault — Google Sign-In edition
+# Oxygen Vault
 
 A glassmorphism anime + manga tracker with Google Sign-In and per-user
-local storage. Same UI as the public Otaku Vault, with a login gate
+local storage. Same UI as the public Oxygen Vault, with a login gate
 in front so each Google account on the device gets its own private
 library.
 

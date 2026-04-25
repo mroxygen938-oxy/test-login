@@ -2264,19 +2264,16 @@ html[data-theme='light'] .theme-toggle .pill {
   margin-top: 10px;
 }
 
-/* Hide the official GSI button without removing it from the DOM —
-   we forward clicks to it from our custom button below. */
-.login-google-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
-  clip: rect(0 0 0 0);
+/* Container that hosts the official Telegram widget when the
+   custom-button flow can't be used (e.g. script blocked). */
+.login-tg-widget-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
 }
 
-.login-google-btn-custom {
+.login-tg-btn {
   --g-bg-1: #1a1a22;
   --g-bg-2: #0f0f17;
   position: relative;
@@ -2312,7 +2309,7 @@ html[data-theme='light'] .theme-toggle .pill {
     background 0.18s var(--ease);
 }
 
-[data-theme='light'] .login-google-btn-custom {
+[data-theme='light'] .login-tg-btn {
   --g-bg-1: #ffffff;
   --g-bg-2: #f4f4f7;
   color: #1f1f29;
@@ -2324,7 +2321,7 @@ html[data-theme='light'] .theme-toggle .pill {
     0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.login-google-btn-custom::before {
+.login-tg-btn::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -2347,7 +2344,7 @@ html[data-theme='light'] .theme-toggle .pill {
   z-index: 0;
 }
 
-.login-google-btn-custom:hover:not(:disabled) {
+.login-tg-btn:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: rgba(255, 255, 255, 0.14);
   box-shadow:
@@ -2357,11 +2354,11 @@ html[data-theme='light'] .theme-toggle .pill {
     0 0 32px color-mix(in srgb, var(--accent-a) 20%, transparent);
 }
 
-.login-google-btn-custom:hover:not(:disabled)::before {
+.login-tg-btn:hover:not(:disabled)::before {
   opacity: 1;
 }
 
-.login-google-btn-custom:active:not(:disabled) {
+.login-tg-btn:active:not(:disabled) {
   transform: translateY(0);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
@@ -2369,17 +2366,17 @@ html[data-theme='light'] .theme-toggle .pill {
     0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-.login-google-btn-custom:disabled {
+.login-tg-btn:disabled {
   cursor: progress;
   opacity: 0.65;
 }
 
-.login-google-btn-custom:focus-visible {
+.login-tg-btn:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent-a) 70%, transparent);
   outline-offset: 3px;
 }
 
-.login-google-icon {
+.login-tg-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2388,13 +2385,34 @@ html[data-theme='light'] .theme-toggle .pill {
   z-index: 1;
 }
 
-.login-google-icon svg {
+.login-tg-icon svg {
   display: block;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+  filter: drop-shadow(0 1px 4px rgba(55, 187, 254, 0.45));
 }
 
-.login-google-label {
+.login-tg-label {
   z-index: 1;
+}
+
+.login-guest-btn {
+  align-self: center;
+  margin-top: -4px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px dashed var(--glass-border-strong);
+  border-radius: 999px;
+  color: var(--fg-3);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 0.18s var(--ease), border-color 0.18s var(--ease);
+}
+
+.login-guest-btn:hover {
+  color: var(--fg-1);
+  border-color: color-mix(in srgb, var(--accent-a) 50%, transparent);
 }
 
 .login-features {

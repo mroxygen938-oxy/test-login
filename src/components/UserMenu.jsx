@@ -26,13 +26,14 @@ export default function UserMenu() {
 
   if (!user) return null
 
-  const initials = (user.givenName || user.name || '?')
-    .trim()
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ') || 'You'
+  const handle = user.username ? `@${user.username}` : ''
+  const initials = fullName
     .split(/\s+/)
     .map((s) => s[0])
     .slice(0, 2)
     .join('')
-    .toUpperCase()
+    .toUpperCase() || '?'
 
   return (
     <div className="user-menu" ref={wrapRef}>
@@ -42,16 +43,16 @@ export default function UserMenu() {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Signed in as ${user.name}`}
+        aria-label={`Signed in as ${fullName}`}
       >
         <span className="user-avatar" aria-hidden="true">
-          {user.picture ? (
-            <img src={user.picture} alt="" referrerPolicy="no-referrer" />
+          {user.photoUrl ? (
+            <img src={user.photoUrl} alt="" referrerPolicy="no-referrer" />
           ) : (
-            <span className="user-avatar-fallback">{initials || '?'}</span>
+            <span className="user-avatar-fallback">{initials}</span>
           )}
         </span>
-        <span className="user-chip-name">{user.givenName || user.name}</span>
+        <span className="user-chip-name">{user.firstName || fullName}</span>
         <svg
           className="user-chip-caret"
           viewBox="0 0 24 24"
@@ -72,16 +73,16 @@ export default function UserMenu() {
         <div className="user-popover glass-strong" role="menu">
           <div className="user-popover-header">
             <span className="user-avatar large" aria-hidden="true">
-              {user.picture ? (
-                <img src={user.picture} alt="" referrerPolicy="no-referrer" />
+              {user.photoUrl ? (
+                <img src={user.photoUrl} alt="" referrerPolicy="no-referrer" />
               ) : (
-                <span className="user-avatar-fallback">{initials || '?'}</span>
+                <span className="user-avatar-fallback">{initials}</span>
               )}
             </span>
             <div className="user-popover-id">
-              <div className="user-popover-name">{user.name}</div>
-              {user.email && (
-                <div className="user-popover-email">{user.email}</div>
+              <div className="user-popover-name">{fullName}</div>
+              {handle && (
+                <div className="user-popover-email">{handle}</div>
               )}
             </div>
           </div>

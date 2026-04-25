@@ -1,23 +1,43 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 
-/* The OAuth Web Client ID is public and safe to ship in the JS bundle.
-   Set the same value in `Authorized JavaScript origins` for every URL
-   the app runs on (localhost dev, vite preview, deploy URL). */
-export const GOOGLE_CLIENT_ID =
-  '940172318295-lbu2t88h0holi5l04h8qqmb336ap2qn2.apps.googleusercontent.com'
+/* ────────────────────────────────────────────────────────────────────
+   Telegram bot config — fill in once you've registered the bot with
+   @BotFather and run /setdomain. Both the username (without @) and
+   the numeric bot ID are required for the custom dark button flow.
+
+   Get the numeric ID by messaging @username_to_id_bot, or use the
+   number before the colon in your bot token from BotFather.
+   ──────────────────────────────────────────────────────────────────── */
+export const TELEGRAM_BOT_USERNAME = 'YOUR_BOT_USERNAME_HERE'
+export const TELEGRAM_BOT_ID = 0 // e.g. 1234567890
+
+/* Max age of a Telegram auth payload we'll trust (24 h, as Telegram
+   recommends). Older payloads are rejected on the assumption they were
+   leaked or replayed. */
+const MAX_AUTH_AGE_SECONDS = 60 * 60 * 24
 
 const AUTH_KEY = 'otaku-vault/auth/user'
 
 const AuthCtx = createContext(null)
 
-function isValidProfile(p) {
-  return Boolean(
-    p &&
-      typeof p === 'object' &&
-      typeof p.sub === 'string' &&
-      p.sub.length > 0
-  )
+/* Basic shape check on a Telegram-widget login payload.
+   Full HMAC verification of the `hash` field requires the bot token,
+   which can't live in a client-side bundle — that level of validation
+   needs a small server. For a localStorage-only app this is the
+   standard client-side check. */
+function isValidTelegramPayload(p) {
+  if (!p || typeof p !== 'object') return false
+  if (typeof p.id !== 'number' && typeof p.id !== 'string') return false
+  if (!p.id) return false
+  if (typeof p.auth_date !== 'number') return false
+  const ageSec = Math.floor(Date.now() / 1000) - p.auth_date
+  if (ageSec < 0 || ageSec > MAX_AUTH_AGE_SECONDS) return false
+  return true
+}
+
+function isValidStoredUser(u) {
+  return Boolean(u && typeof u === 'object' && (u.id || u.id === 0))
 }
 
 function loadStoredUser() {
@@ -25,8 +45,7 @@ function loadStoredUser() {
     const raw = window.localStorage.getItem(AUTH_KEY)
     if (!raw) return null
     const u = JSON.parse(raw)
-    if (!isValidProfile(u)) return null
-    return u
+    return isValidStoredUser(u) ? u : null
   } catch {
     return null
   }
@@ -35,25 +54,47 @@ function loadStoredUser() {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(loadStoredUser)
 
-  /* `profile` comes from Google's userinfo endpoint
-     (https://www.googleapis.com/oauth2/v3/userinfo) and contains
-     `sub`, `name`, `given_name`, `email`, `picture`, etc. */
-  const login = useCallback((profile) => {
-    if (!isValidProfile(profile)) {
-      console.warn('Rejected Google profile — missing sub.')
+  /* `payload` is the object Telegram's widget hands back after the
+     user authorises:
+       { id, first_name, last_name?, username?, photo_url?, auth_date, hash } */
+  const login = useCallback((payload) => {
+    if (!isValidTelegramPayload(payload)) {
+      console.warn('Rejected Telegram payload — failed basic validation.')
       return false
     }
     const u = {
-      sub: String(profile.sub),
-      name: profile.name || profile.email || 'Anonymous',
-      givenName: profile.given_name || profile.name || '',
-      email: profile.email || '',
-      picture: profile.picture || '',
+      id: String(payload.id),
+      firstName: payload.first_name || payload.username || 'You',
+      lastName: payload.last_name || '',
+      username: payload.username || '',
+      photoUrl: payload.photo_url || '',
+      authDate: payload.auth_date,
     }
     try {
       window.localStorage.setItem(AUTH_KEY, JSON.stringify(u))
     } catch {
       /* storage full — still accept the in-memory session */
+    }
+    setUser(u)
+    return true
+  }, [])
+
+  /* Local-only guest sign-in for development on localhost — never
+     shown on the deployed URL. Useful for testing without a real
+     Telegram account. */
+  const loginGuest = useCallback(() => {
+    const u = {
+      id: 'guest',
+      firstName: 'Guest',
+      lastName: '',
+      username: 'guest',
+      photoUrl: '',
+      authDate: Math.floor(Date.now() / 1000),
+    }
+    try {
+      window.localStorage.setItem(AUTH_KEY, JSON.stringify(u))
+    } catch {
+      /* ignore */
     }
     setUser(u)
     return true
@@ -68,7 +109,10 @@ export function AuthProvider({ children }) {
     setUser(null)
   }, [])
 
-  const value = useMemo(() => ({ user, login, logout }), [user, login, logout])
+  const value = useMemo(
+    () => ({ user, login, loginGuest, logout }),
+    [user, login, loginGuest, logout]
+  )
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>
 }
 
@@ -78,6 +122,7 @@ export function useAuth() {
   return ctx
 }
 
-/* Per-user storage key — every key the Vault uses is suffixed with the
-   Google `sub` so two users on the same browser keep separate libraries. */
-export const userKey = (base, user) => `${base}/${user.sub}`
+/* Per-user storage key — every key the Vault uses is suffixed with
+   the Telegram user id so two users on the same browser keep
+   separate libraries. */
+export const userKey = (base, user) => `${base}/${user.id}`

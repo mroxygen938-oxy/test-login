@@ -15,7 +15,7 @@ import { uid, useLocalStorage } from './lib/storage.js'
 import { AuthProvider, useAuth, userKey } from './lib/auth.jsx'
 import { IconMenu, IconPlus, IconSearch, IconSparkle, IconX } from './lib/icons.jsx'
 
-/* These are bases; each one is namespaced per Google user via userKey(base, user). */
+/* These are bases; each one is namespaced per Telegram user via userKey(base, user). */
 const BASE_KEY_ANIME = 'otaku-vault/animes/v1'
 const BASE_KEY_MANGA = 'otaku-vault/mangas/v1'
 const BASE_KEY_LIST_ANIME = 'otaku-vault/active-list'
@@ -144,12 +144,12 @@ export default function App() {
 }
 
 /* Renders the login screen until a user is authenticated.
-   Re-keys <Vault/> on user.sub so all per-user state resets cleanly
+   Re-keys <Vault/> on user.id so all per-user state resets cleanly
    between sign-ins. */
 function Gate() {
   const { user } = useAuth()
   if (!user) return <LoginScreen />
-  return <Vault key={user.sub} user={user} />
+  return <Vault key={user.id} user={user} />
 }
 
 function Vault({ user }) {

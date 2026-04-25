@@ -1,116 +1,131 @@
 import { useEffect, useRef, useState } from 'react'
-import { GOOGLE_CLIENT_ID, useAuth } from '../lib/auth.jsx'
+import {
+  TELEGRAM_BOT_ID,
+  TELEGRAM_BOT_USERNAME,
+  useAuth,
+} from '../lib/auth.jsx'
 
-/* Multi-color official Google "G" rendered directly on the dark
-   surface so we keep the brand colors without Google's white plate. */
-function GoogleGIcon() {
+const TELEGRAM_WIDGET_SRC = 'https://telegram.org/js/telegram-widget.js?22'
+
+/* Pull the Telegram widget script in once on first render. */
+function loadTelegramWidget() {
+  if (typeof document === 'undefined') return
+  if (document.querySelector(`script[src="${TELEGRAM_WIDGET_SRC}"]`)) return
+  const s = document.createElement('script')
+  s.src = TELEGRAM_WIDGET_SRC
+  s.async = true
+  document.head.appendChild(s)
+}
+
+/* Stylised Telegram paper-plane mark. */
+function TelegramIcon() {
   return (
-    <svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      aria-hidden="true"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <linearGradient id="tg-grad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#37BBFE" />
+          <stop offset="100%" stopColor="#007DBB" />
+        </linearGradient>
+      </defs>
+      <circle cx="12" cy="12" r="11" fill="url(#tg-grad)" />
       <path
-        fill="#EA4335"
-        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-      />
-      <path
-        fill="#4285F4"
-        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
-      />
-      <path
-        fill="#34A853"
-        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+        d="M17.5 7.6 15.5 17c-.15.7-.55.86-1.12.54l-3.1-2.29-1.5 1.45c-.16.16-.3.3-.62.3l.22-3.13 5.7-5.15c.25-.22-.05-.34-.39-.13L7.6 12.06l-3.04-.95c-.66-.21-.68-.66.14-.97l11.9-4.59c.55-.2 1.03.13.86.99z"
+        fill="#fff"
       />
     </svg>
   )
 }
 
-const USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo'
+const isLocalhost =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1')
+
+const botConfigured =
+  TELEGRAM_BOT_USERNAME &&
+  TELEGRAM_BOT_USERNAME !== 'YOUR_BOT_USERNAME_HERE' &&
+  TELEGRAM_BOT_ID > 0
 
 export default function LoginScreen() {
-  const { login } = useAuth()
-  const tokenClientRef = useRef(null)
-  const [gsiReady, setGsiReady] = useState(
-    typeof window !== 'undefined' && Boolean(window.google?.accounts?.oauth2)
-  )
+  const { login, loginGuest } = useAuth()
+  const widgetSlotRef = useRef(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [showWidget, setShowWidget] = useState(false)
 
-  /* Wait for the GSI script to finish loading. */
+  /* Pull the widget script in for both flows (custom button uses
+     `Telegram.Login.auth`, fallback uses the rendered widget). */
   useEffect(() => {
-    if (gsiReady) return undefined
-    let cancelled = false
-    const t = setInterval(() => {
-      if (cancelled) return
-      if (window.google?.accounts?.oauth2) {
-        setGsiReady(true)
-        clearInterval(t)
-      }
-    }, 100)
-    const timeout = setTimeout(() => clearInterval(t), 8000)
-    return () => {
-      cancelled = true
-      clearInterval(t)
-      clearTimeout(timeout)
+    loadTelegramWidget()
+  }, [])
+
+  /* Expose the auth callback used by the rendered widget fallback. */
+  useEffect(() => {
+    window.onTelegramAuth = (payload) => {
+      const ok = login(payload)
+      if (!ok) setError('Telegram returned a payload we could not validate.')
     }
-  }, [gsiReady])
+    return () => {
+      try {
+        delete window.onTelegramAuth
+      } catch {
+        window.onTelegramAuth = undefined
+      }
+    }
+  }, [login])
 
-  /* Build the OAuth2 token client once GSI is loaded. */
+  /* Mount the official Telegram widget into our card when the
+     fallback path is active. */
   useEffect(() => {
-    if (!gsiReady) return
-    tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
-      scope: 'openid email profile',
-      callback: async (response) => {
-        if (response.error) {
-          setBusy(false)
+    if (!showWidget || !widgetSlotRef.current || !botConfigured) return
+    const slot = widgetSlotRef.current
+    slot.innerHTML = ''
+    const s = document.createElement('script')
+    s.async = true
+    s.src = TELEGRAM_WIDGET_SRC
+    s.setAttribute('data-telegram-login', TELEGRAM_BOT_USERNAME)
+    s.setAttribute('data-size', 'large')
+    s.setAttribute('data-radius', '20')
+    s.setAttribute('data-userpic', 'true')
+    s.setAttribute('data-request-access', 'write')
+    s.setAttribute('data-onauth', 'onTelegramAuth(user)')
+    slot.appendChild(s)
+  }, [showWidget])
+
+  const handleClick = () => {
+    if (busy) return
+    setError('')
+    if (!botConfigured) {
+      setError(
+        'The bot is not configured yet. Add the bot username and ID in src/lib/auth.jsx.'
+      )
+      return
+    }
+    if (!window.Telegram?.Login?.auth) {
+      /* Widget script still loading — fall back to the rendered button. */
+      setShowWidget(true)
+      return
+    }
+    setBusy(true)
+    window.Telegram.Login.auth(
+      { bot_id: TELEGRAM_BOT_ID, request_access: 'write' },
+      (data) => {
+        setBusy(false)
+        if (!data) {
           setError('Sign-in was cancelled.')
           return
         }
-        if (!response.access_token) {
-          setBusy(false)
-          setError('Could not get an access token from Google.')
-          return
-        }
-        try {
-          const res = await fetch(USERINFO_URL, {
-            headers: { Authorization: `Bearer ${response.access_token}` },
-          })
-          if (!res.ok) {
-            throw new Error(`userinfo ${res.status}`)
-          }
-          const profile = await res.json()
-          const ok = login(profile)
-          if (!ok) {
-            setError('Google response was missing required fields.')
-          }
-        } catch {
-          setError('Could not load your Google profile. Please try again.')
-        } finally {
-          setBusy(false)
-        }
-      },
-      error_callback: () => {
-        setBusy(false)
-        setError('Sign-in was cancelled.')
-      },
-    })
-  }, [gsiReady, login])
-
-  const handleClick = () => {
-    if (!gsiReady || !tokenClientRef.current || busy) return
-    setError('')
-    setBusy(true)
-    try {
-      tokenClientRef.current.requestAccessToken({ prompt: 'consent' })
-    } catch {
-      setBusy(false)
-      setError('Could not open the Google sign-in popup.')
-    }
+        const ok = login(data)
+        if (!ok) setError('Telegram returned a payload we could not validate.')
+      }
+    )
   }
-
-  const disabled = !gsiReady || busy
 
   return (
     <div className="login-root">
@@ -138,36 +153,46 @@ export default function LoginScreen() {
 
         <h1 className="login-title">Sign in to continue</h1>
         <p className="login-text">
-          Your library is saved per Google account, so you can switch
-          between accounts on the same device and each gets a separate
-          vault.
+          Your library is saved per Telegram account on this device, so
+          two people on the same browser keep separate vaults.
         </p>
 
         <div className="login-button-wrap">
-          <button
-            type="button"
-            className="login-google-btn-custom"
-            onClick={handleClick}
-            disabled={disabled}
-            aria-label="Continue with Google"
-          >
-            <span className="login-google-icon">
-              <GoogleGIcon />
-            </span>
-            <span className="login-google-label">
-              {busy
-                ? 'Signing you in…'
-                : gsiReady
-                  ? 'Continue with Google'
-                  : 'Loading Google…'}
-            </span>
-          </button>
+          {!showWidget && (
+            <button
+              type="button"
+              className="login-tg-btn"
+              onClick={handleClick}
+              disabled={busy}
+              aria-label="Continue with Telegram"
+            >
+              <span className="login-tg-icon">
+                <TelegramIcon />
+              </span>
+              <span className="login-tg-label">
+                {busy ? 'Opening Telegram…' : 'Continue with Telegram'}
+              </span>
+            </button>
+          )}
+          {showWidget && (
+            <div ref={widgetSlotRef} className="login-tg-widget-slot" />
+          )}
         </div>
 
         {error && (
           <div className="login-error" role="alert">
             {error}
           </div>
+        )}
+
+        {isLocalhost && (
+          <button
+            type="button"
+            className="login-guest-btn"
+            onClick={loginGuest}
+          >
+            Continue as guest (localhost only)
+          </button>
         )}
 
         <ul className="login-features" aria-label="What you get">

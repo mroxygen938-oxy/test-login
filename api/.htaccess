@@ -1,0 +1,13 @@
+# Block direct access to internal files.
+<FilesMatch "^(_lib\.php|config\.php|config\.example\.php)$">
+    Require all denied
+</FilesMatch>
+
+# Disable caching for the API responses themselves (they vary per request).
+<IfModule mod_headers.c>
+    Header set Cache-Control "no-store, max-age=0"
+</IfModule>
+
+# Force PHP to handle .php files even if a custom DirectoryIndex was set
+# globally to something else.
+DirectoryIndex disabled

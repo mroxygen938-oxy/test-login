@@ -5,6 +5,7 @@ import AnimeModal from './components/AnimeModal.jsx'
 import MovePopover from './components/MovePopover.jsx'
 import LoginScreen from './components/LoginScreen.jsx'
 import UserMenu from './components/UserMenu.jsx'
+import SyncBadge from './components/SyncBadge.jsx'
 import {
   getListById,
   getListIds,
@@ -13,6 +14,7 @@ import {
 } from './lib/lists.js'
 import { uid, useLocalStorage } from './lib/storage.js'
 import { AuthProvider, useAuth, userKey } from './lib/auth.jsx'
+import { useLibrarySync } from './lib/sync.js'
 import { IconMenu, IconPlus, IconSearch, IconSparkle, IconX } from './lib/icons.jsx'
 
 /* These are bases; each one is namespaced per Telegram user via userKey(base, user). */
@@ -174,6 +176,24 @@ function Vault({ user }) {
     userKey(BASE_KEY_LIST_MANGA, user),
     'reading'
   )
+  const sync = useLibrarySync({
+    user,
+    state: {
+      animes,
+      mangas,
+      activeListAnime,
+      activeListManga,
+      mediaMode,
+    },
+    setters: {
+      setAnimes,
+      setMangas,
+      setActiveListAnime,
+      setActiveListManga,
+      setMediaMode,
+    },
+  })
+
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -520,6 +540,7 @@ function Vault({ user }) {
             <IconPlus />
             <span className="topbar-add-label">{config.addLabel}</span>
           </button>
+          <SyncBadge status={sync.status} lastError={sync.lastError} />
           <UserMenu />
         </div>
 

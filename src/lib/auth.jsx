@@ -76,7 +76,11 @@ export function AuthProvider({ children }) {
 
   /* `payload` is the object Telegram's widget hands back after the
      user authorises:
-       { id, first_name, last_name?, username?, photo_url?, auth_date, hash } */
+       { id, first_name, last_name?, username?, photo_url?, auth_date, hash }
+
+     We keep the *raw* payload alongside the cleaned-up display fields
+     so the sync layer can re-authenticate every API call by sending
+     the original hash back to the server for HMAC verification. */
   const login = useCallback((payload) => {
     if (!isValidTelegramPayload(payload)) {
       console.warn('Rejected Telegram payload — failed basic validation.')
@@ -89,6 +93,7 @@ export function AuthProvider({ children }) {
       username: payload.username || '',
       photoUrl: payload.photo_url || '',
       authDate: payload.auth_date,
+      raw: payload,
     }
     try {
       window.localStorage.setItem(AUTH_KEY, JSON.stringify(u))
@@ -110,6 +115,7 @@ export function AuthProvider({ children }) {
       username: 'guest',
       photoUrl: '',
       authDate: Math.floor(Date.now() / 1000),
+      raw: null,
     }
     try {
       window.localStorage.setItem(AUTH_KEY, JSON.stringify(u))

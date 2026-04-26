@@ -2641,7 +2641,8 @@ html[data-theme='light'] .btn-ghost:hover {
 .sync-badge-offline {
   color: #b3b3c0;
 }
-.sync-badge-error {
+.sync-badge-error,
+.sync-badge-expired {
   color: #ff6b8a;
   border-color: rgba(255, 107, 138, 0.35);
 }

@@ -155,6 +155,7 @@ function Gate() {
 }
 
 function Vault({ user }) {
+  const { logout } = useAuth()
   const [theme, setTheme] = useLocalStorage(STORAGE_KEY_THEME, 'dark')
   const [mediaMode, setMediaMode] = useLocalStorage(
     userKey(BASE_KEY_MODE, user),
@@ -191,6 +192,11 @@ function Vault({ user }) {
       setActiveListAnime,
       setActiveListManga,
       setMediaMode,
+    },
+    onAuthInvalid: () => {
+      /* Stale Telegram payload. Sign out so the user can re-login and
+         get a fresh signed payload that the server will accept. */
+      logout()
     },
   })
 

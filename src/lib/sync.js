@@ -55,7 +55,10 @@ async function postJson(url, body, signal) {
   }
   if (!r.ok) {
     const detail = data?.error || `HTTP ${r.status}`
-    throw new Error(detail)
+    const err = new Error(detail)
+    err.status = r.status
+    err.code = data?.error || ''
+    throw err
   }
   return data
 }
@@ -69,7 +72,7 @@ async function postJson(url, body, signal) {
 
    Returns { status, lastSavedAt, lastError } where status is one of
    'idle' | 'loading' | 'saving' | 'synced' | 'offline' | 'error'. */
-export function useLibrarySync({ user, state, setters }) {
+export function useLibrarySync({ user, state, setters, onAuthInvalid }) {
   const [status, setStatus] = useState('idle')
   const [lastSavedAt, setLastSavedAt] = useState(0)
   const [lastError, setLastError] = useState('')
@@ -80,6 +83,23 @@ export function useLibrarySync({ user, state, setters }) {
   useEffect(() => {
     settersRef.current = setters
   }, [setters])
+
+  const onAuthInvalidRef = useRef(onAuthInvalid)
+  useEffect(() => {
+    onAuthInvalidRef.current = onAuthInvalid
+  }, [onAuthInvalid])
+
+  const handleAuthError = (e) => {
+    if (e?.status === 401) {
+      try {
+        onAuthInvalidRef.current?.()
+      } catch {
+        /* swallow */
+      }
+      return true
+    }
+    return false
+  }
 
   /* Tracks the most recent server-known timestamp so we don't clobber
      newer local edits on poll. */
@@ -145,7 +165,11 @@ export function useLibrarySync({ user, state, setters }) {
       } catch (e) {
         if (e.name === 'AbortError') return
         setLastError(String(e.message || e))
-        setStatus('offline')
+        if (handleAuthError(e)) {
+          setStatus('expired')
+        } else {
+          setStatus('offline')
+        }
       } finally {
         firstLoadDoneRef.current = true
       }
@@ -175,7 +199,11 @@ export function useLibrarySync({ user, state, setters }) {
       } catch (e) {
         if (e.name === 'AbortError') return
         setLastError(String(e.message || e))
-        setStatus('error')
+        if (handleAuthError(e)) {
+          setStatus('expired')
+        } else {
+          setStatus('error')
+        }
       }
     }, SAVE_DEBOUNCE_MS)
     return () => {

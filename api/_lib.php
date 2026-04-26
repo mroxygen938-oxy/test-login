@@ -80,8 +80,11 @@ function verify_telegram_auth(array $auth, string $botToken): bool {
 
     $authDate = (int) $auth['auth_date'];
     $age = time() - $authDate;
-    /* Allow up to 5 min of clock skew, max 24 h freshness. */
-    if ($age < -300 || $age > 86400) return false;
+    /* Allow up to 5 min of clock skew. Freshness window is 30 days so a
+       Telegram login keeps working across browser sessions; clients
+       still need to re-login eventually so a stolen payload can't live
+       forever. */
+    if ($age < -300 || $age > 2592000) return false;
 
     return true;
 }

@@ -8,6 +8,7 @@ const LABELS = {
   synced: 'Synced',
   offline: 'Offline',
   error: 'Retry',
+  expired: 'Re-login',
   idle: '',
 }
 

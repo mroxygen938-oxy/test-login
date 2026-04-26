@@ -15,6 +15,7 @@ import {
 import { uid, useLocalStorage } from './lib/storage.js'
 import { AuthProvider, useAuth, userKey } from './lib/auth.jsx'
 import { useLibrarySync } from './lib/sync.js'
+import { isNative } from './lib/native.js'
 import { IconMenu, IconPlus, IconSearch, IconSparkle, IconX } from './lib/icons.jsx'
 
 /* These are bases; each one is namespaced per Telegram user via userKey(base, user). */
@@ -149,9 +150,44 @@ export default function App() {
    Re-keys <Vault/> on user.id so all per-user state resets cleanly
    between sign-ins. */
 function Gate() {
-  const { user } = useAuth()
+  const { user, login } = useAuth()
+  useNativeDeepLinkAuth(login)
   if (!user) return <LoginScreen />
   return <Vault key={user.id} user={user} />
+}
+
+/* Subscribes to Capacitor's App.appUrlOpen event so the deep-link
+   return from auth.html (oxygenvault://auth?payload=...) wakes the
+   app and signs the user in. No-op on the web. */
+function useNativeDeepLinkAuth(login) {
+  useEffect(() => {
+    if (!isNative()) return undefined
+    let listener = null
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [{ App }, { Browser }, native] = await Promise.all([
+          import('@capacitor/app'),
+          import('@capacitor/browser'),
+          import('./lib/native.js'),
+        ])
+        if (cancelled) return
+        listener = await App.addListener('appUrlOpen', (event) => {
+          const payload = native.parseDeepLinkAuthPayload(event.url)
+          if (payload) {
+            login(payload)
+            try { Browser.close() } catch { /* noop */ }
+          }
+        })
+      } catch {
+        /* Capacitor packages absent — running on web. */
+      }
+    })()
+    return () => {
+      cancelled = true
+      if (listener && typeof listener.remove === 'function') listener.remove()
+    }
+  }, [login])
 }
 
 function Vault({ user }) {

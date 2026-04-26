@@ -4,6 +4,10 @@ import {
   TELEGRAM_BOT_USERNAME,
   useAuth,
 } from '../lib/auth.jsx'
+import { isNative, openExternal } from '../lib/native.js'
+
+const NATIVE_AUTH_URL =
+  'https://oxygenvault.online/auth.html?return_to=oxygenvault%3A%2F%2Fauth'
 
 const TELEGRAM_WIDGET_SRC = 'https://telegram.org/js/telegram-widget.js?22'
 
@@ -105,6 +109,20 @@ export default function LoginScreen() {
       setError(
         'The bot is not configured yet. Add the bot username and ID in src/lib/auth.jsx.'
       )
+      return
+    }
+    /* On Android (Capacitor) the popup-based widget is unreliable inside
+       a WebView. Route the user out to the system browser, then bounce
+       back into the app via a custom URL scheme. App.jsx parses the
+       returned payload and calls login() through the deep link
+       handler. */
+    if (isNative()) {
+      setBusy(true)
+      openExternal(NATIVE_AUTH_URL).finally(() => {
+        /* Browser stays open until user authorises. Reset busy so the
+           button isn't permanently stuck if they back out. */
+        setTimeout(() => setBusy(false), 800)
+      })
       return
     }
     if (!window.Telegram?.Login?.auth) {

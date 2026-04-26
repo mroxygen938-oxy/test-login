@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react'
 import { ICON_MAP } from '../lib/iconMap.js'
 import { IconX } from '../lib/icons.jsx'
 import ThemeToggle from './ThemeToggle.jsx'
@@ -16,6 +17,34 @@ export default function Sidebar({
   sectionTitle,
   onClose,
 }) {
+  /* Sliding glass pill that tracks the active nav item. We measure
+     the active button's position relative to the .nav container
+     whenever the active list (or layout) changes, then translate the
+     pill to that spot via a transform-only transition. */
+  const navRef = useRef(null)
+  const itemRefs = useRef(new Map())
+  const [pill, setPill] = useState({ top: 0, height: 0, ready: false })
+
+  useLayoutEffect(() => {
+    const navEl = navRef.current
+    const btn = itemRefs.current.get(activeList)
+    if (!navEl || !btn) {
+      setPill((p) => ({ ...p, ready: false }))
+      return
+    }
+    const navRect = navEl.getBoundingClientRect()
+    const btnRect = btn.getBoundingClientRect()
+    setPill({
+      top: btnRect.top - navRect.top + navEl.scrollTop,
+      height: btnRect.height,
+      ready: true,
+    })
+  }, [activeList, lists, mediaMode, totalCount])
+
+  const setItemRef = (key) => (el) => {
+    if (el) itemRefs.current.set(key, el)
+    else itemRefs.current.delete(key)
+  }
   return (
     <aside className="sidebar glass" role="navigation" aria-label="Lists navigation">
       <div className="brand">
@@ -75,10 +104,20 @@ export default function Sidebar({
         </button>
       </div>
 
-      <nav className="nav" aria-label="Lists">
+      <nav className="nav" aria-label="Lists" ref={navRef}>
+        <span
+          className="nav-active-pill"
+          aria-hidden="true"
+          style={{
+            transform: `translate3d(0, ${pill.top}px, 0)`,
+            height: `${pill.height}px`,
+            opacity: pill.ready && pill.height > 0 ? 1 : 0,
+          }}
+        />
         <div className="nav-section">Library</div>
         <button
           type="button"
+          ref={setItemRef('all')}
           className={`nav-item ${activeList === 'all' ? 'active' : ''}`}
           onClick={() => onSelect('all')}
         >
@@ -110,6 +149,7 @@ export default function Sidebar({
             <button
               key={list.id}
               type="button"
+              ref={setItemRef(list.id)}
               className={`nav-item ${activeList === list.id ? 'active' : ''}`}
               onClick={() => onSelect(list.id)}
             >

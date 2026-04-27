@@ -15,6 +15,7 @@ import {
 import { uid, useLocalStorage } from './lib/storage.js'
 import { AuthProvider, useAuth, userKey } from './lib/auth.jsx'
 import { useLibrarySync } from './lib/sync.js'
+import { uploadDataUrl, isLegacyDataUrl } from './lib/imageStore.js'
 import { isNative } from './lib/native.js'
 import { IconMenu, IconPlus, IconSearch, IconSparkle, IconX } from './lib/icons.jsx'
 
@@ -243,7 +244,88 @@ function Vault({ user }) {
   const [movePopover, setMovePopover] = useState(null)
   const [toasts, setToasts] = useState([])
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [migration, setMigration] = useState({ active: false, done: 0, total: 0 })
   const searchRef = useRef(null)
+  const migrationStartedRef = useRef(false)
+
+  /* One-time migration: lift any inline data-URL cover images out of
+     the synced library and into the server-side image store. Runs
+     after the first successful pull so we operate on the *server's*
+     copy of the library, not whatever stale snapshot localStorage
+     happened to have. After this completes, the library JSON is back
+     to a few KBs and sync stops being a per-image bandwidth fight. */
+  useEffect(() => {
+    if (!user?.raw) return
+    if (sync.status !== 'synced') return
+    if (migrationStartedRef.current) return
+
+    const legacyAnimes = animes.filter((a) => isLegacyDataUrl(a.image))
+    const legacyMangas = mangas.filter((m) => isLegacyDataUrl(m.image))
+    const total = legacyAnimes.length + legacyMangas.length
+    if (total === 0) return
+
+    migrationStartedRef.current = true
+    let cancelled = false
+
+    ;(async () => {
+      setMigration({ active: true, done: 0, total })
+      let done = 0
+
+      const migrateOne = async (item, kind) => {
+        if (cancelled) return null
+        try {
+          const { url } = await uploadDataUrl(item.image, user.raw)
+          done += 1
+          setMigration({ active: true, done, total })
+          return { id: item.id, kind, url }
+        } catch {
+          done += 1
+          setMigration({ active: true, done, total })
+          return null
+        }
+      }
+
+      const results = []
+      /* Sequential — keeps the server happy and lets the user see
+         progress. With <100 images this finishes in a minute or two. */
+      for (const a of legacyAnimes) {
+        const r = await migrateOne(a, 'anime')
+        if (r) results.push(r)
+      }
+      for (const m of legacyMangas) {
+        const r = await migrateOne(m, 'manga')
+        if (r) results.push(r)
+      }
+
+      if (cancelled) return
+
+      if (results.length > 0) {
+        const animeMap = new Map(
+          results.filter((r) => r.kind === 'anime').map((r) => [r.id, r.url])
+        )
+        const mangaMap = new Map(
+          results.filter((r) => r.kind === 'manga').map((r) => [r.id, r.url])
+        )
+        if (animeMap.size > 0) {
+          setAnimes((prev) =>
+            prev.map((a) => (animeMap.has(a.id) ? { ...a, image: animeMap.get(a.id) } : a))
+          )
+        }
+        if (mangaMap.size > 0) {
+          setMangas((prev) =>
+            prev.map((m) => (mangaMap.has(m.id) ? { ...m, image: mangaMap.get(m.id) } : m))
+          )
+        }
+      }
+
+      setMigration({ active: false, done, total })
+    })()
+
+    return () => {
+      cancelled = true
+    }
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [user?.raw, sync.status])
 
   // Per-mode derived state.
   const config = getModeConfig(mediaMode)
@@ -634,7 +716,21 @@ function Vault({ user }) {
             <IconPlus />
             <span className="topbar-add-label">{config.addLabel}</span>
           </button>
-          <SyncBadge status={sync.status} lastError={sync.lastError} />
+          {migration.active ? (
+            <span
+              className="sync-badge sync-badge-saving"
+              title={`Migrating images: ${migration.done}/${migration.total}`}
+              aria-live="polite"
+              role="status"
+            >
+              <span className="sync-dot" aria-hidden="true" />
+              <span className="sync-label">
+                Migrating {migration.done}/{migration.total}
+              </span>
+            </span>
+          ) : (
+            <SyncBadge status={sync.status} lastError={sync.lastError} />
+          )}
           <UserMenu />
         </div>
 
@@ -731,6 +827,7 @@ function Vault({ user }) {
         open={modalOpen}
         initial={editing}
         mediaMode={mediaMode}
+        authRaw={user?.raw || null}
         onClose={closeModal}
         onSave={saveItem}
       />

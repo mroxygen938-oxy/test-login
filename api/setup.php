@@ -9,7 +9,11 @@ require __DIR__ . '/_lib.php';
 $cfg = load_config();
 apply_cors($cfg);
 
-$out = ['php' => PHP_VERSION, 'time' => time()];
+/* Bumped each time the API surface changes so the user can verify
+   their cPanel upload landed correctly. */
+const API_VERSION = '3.0-image-store';
+
+$out = ['php' => PHP_VERSION, 'time' => time(), 'api_version' => API_VERSION];
 
 try {
     $pdo = db($cfg);
@@ -17,10 +21,16 @@ try {
     $out['db'] = 'ok';
     $count = (int) $pdo->query('SELECT COUNT(*) FROM vaults')->fetchColumn();
     $out['rows'] = $count;
+    $imgCount = (int) $pdo->query('SELECT COUNT(*) FROM images')->fetchColumn();
+    $out['images'] = $imgCount;
 } catch (Throwable $e) {
     send_json(500, ['error' => 'setup_failed', 'detail' => $e->getMessage()]);
 }
 
+$out['features'] = [
+    'save_concurrency_check' => true,
+    'image_store'            => true,
+];
 $out['bot_id_in_config'] = $cfg['bot_id'] ?? null;
 $out['bot_token_set']    = !empty($cfg['bot_token']) && $cfg['bot_token'] !== 'PASTE_FULL_BOT_TOKEN_HERE';
 $out['allowed_origins']  = $cfg['allowed_origins'];

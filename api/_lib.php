@@ -118,6 +118,18 @@ function ensure_schema(PDO $pdo): void {
             updated_at   INT UNSIGNED    NOT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 SQL);
+    /* Image blob storage so cover images don't bloat the synced
+       library JSON. IDs are URL-safe base64 of 16 random bytes. */
+    $pdo->exec(<<<'SQL'
+        CREATE TABLE IF NOT EXISTS images (
+            id           VARCHAR(40)     NOT NULL PRIMARY KEY,
+            telegram_id  BIGINT UNSIGNED NOT NULL,
+            content_type VARCHAR(64)     NOT NULL,
+            data         LONGBLOB        NOT NULL,
+            created_at   INT UNSIGNED    NOT NULL,
+            INDEX (telegram_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+SQL);
 }
 
 /* Extract + validate the Telegram payload from a request body. Returns

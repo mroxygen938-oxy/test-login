@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconImage, IconPlus, IconStar, IconTrash, IconX } from '../lib/icons.jsx'
+import { uploadDataUrl } from '../lib/imageStore.js'
 import { getLists, getModeConfig } from '../lib/lists.js'
 
 const emptyItem = (mode) => ({
@@ -52,20 +53,21 @@ async function fileToDataUrl(file, maxDim = 800) {
   }
 }
 
-export default function AnimeModal({ open, initial, mediaMode = 'anime', onClose, onSave }) {
+export default function AnimeModal({ open, initial, mediaMode = 'anime', authRaw = null, onClose, onSave }) {
   if (!open) return null
   return (
     <AnimeModalInner
       key={`${mediaMode}-${initial?.id || 'new'}`}
       initial={initial}
       mediaMode={mediaMode}
+      authRaw={authRaw}
       onClose={onClose}
       onSave={onSave}
     />
   )
 }
 
-function AnimeModalInner({ initial, mediaMode, onClose, onSave }) {
+function AnimeModalInner({ initial, mediaMode, authRaw, onClose, onSave }) {
   const config = getModeConfig(mediaMode)
   const lists = getLists(mediaMode)
   const [form, setForm] = useState(() => ({
@@ -122,10 +124,35 @@ function AnimeModalInner({ initial, mediaMode, onClose, onSave }) {
     return { total, watched }
   }, [hasSeasons, form.seasons])
 
+  const [imageUploading, setImageUploading] = useState(false)
+  const [imageError, setImageError] = useState('')
+
   const handleFile = async (file) => {
     if (!file) return
-    const dataUrl = await fileToDataUrl(file)
+    setImageError('')
+    let dataUrl
+    try {
+      dataUrl = await fileToDataUrl(file)
+    } catch {
+      setImageError('Could not read that image.')
+      return
+    }
+    /* Show the local preview immediately so the user gets feedback,
+       even while the upload is in flight. If upload succeeds we swap
+       in the server URL; if not we keep the data URL as a graceful
+       fallback (will still work for this device, just won't sync to
+       other devices via the server image store). */
     update({ image: dataUrl })
+    if (!authRaw) return
+    setImageUploading(true)
+    try {
+      const { url } = await uploadDataUrl(dataUrl, authRaw)
+      update({ image: url })
+    } catch (e) {
+      setImageError(`Upload failed (${e.message || 'unknown'}). Saved locally only.`)
+    } finally {
+      setImageUploading(false)
+    }
   }
 
   const handleSubmit = (e) => {
@@ -220,14 +247,26 @@ function AnimeModalInner({ initial, mediaMode, onClose, onSave }) {
             />
           </label>
           {form.image && (
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ alignSelf: 'flex-start', fontSize: 12 }}
-              onClick={() => update({ image: '' })}
-            >
-              Remove image
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ fontSize: 12 }}
+                onClick={() => update({ image: '' })}
+              >
+                Remove image
+              </button>
+              {imageUploading && (
+                <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
+                  Uploading…
+                </span>
+              )}
+            </div>
+          )}
+          {imageError && (
+            <div style={{ fontSize: 12, color: '#ff6b8a' }}>
+              {imageError}
+            </div>
           )}
 
           <div className="field">

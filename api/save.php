@@ -28,7 +28,32 @@ if (strlen($json) > 4 * 1024 * 1024) {
 $pdo = db($cfg);
 ensure_schema($pdo);
 
-$now = time();
+/* Optional optimistic-concurrency check. The client tells us the
+   `updated_at` it last observed; if the DB has moved on since then,
+   another device wrote in between and we MUST refuse this save so the
+   stale snapshot can't trample fresh data. The client handles a 409
+   by re-pulling and re-saving with the fresh `updated_at`. */
+$expectedUpdatedAt = isset($body['expected_updated_at'])
+    ? (int) $body['expected_updated_at']
+    : null;
+
+$cur = $pdo->prepare('SELECT updated_at FROM vaults WHERE telegram_id = :id');
+$cur->execute(['id' => $tgId]);
+$row = $cur->fetch();
+$currentUpdatedAt = $row ? (int) $row['updated_at'] : 0;
+
+if ($expectedUpdatedAt !== null && $currentUpdatedAt > $expectedUpdatedAt) {
+    send_json(409, [
+        'error'      => 'conflict',
+        'updated_at' => $currentUpdatedAt,
+    ]);
+}
+
+/* Make `updated_at` strictly monotonic so back-to-back saves within
+   the same second still bump the version. This keeps the conflict
+   check above meaningful even on a fast typer. */
+$now = max($currentUpdatedAt + 1, time());
+
 $stmt = $pdo->prepare(<<<'SQL'
     INSERT INTO vaults (telegram_id, library_json, updated_at)
     VALUES (:id, :lib, :now)

@@ -2672,11 +2672,13 @@ html[data-theme='light'] .btn-ghost:hover {
   flex-shrink: 0;
 }
 .sync-badge-loading,
-.sync-badge-saving {
+.sync-badge-saving,
+.sync-badge-conflict {
   color: #ffd166;
 }
 .sync-badge-loading .sync-dot,
-.sync-badge-saving .sync-dot {
+.sync-badge-saving .sync-dot,
+.sync-badge-conflict .sync-dot {
   animation: sync-pulse 1.1s ease-in-out infinite;
 }
 .sync-badge-synced {

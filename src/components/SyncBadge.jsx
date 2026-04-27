@@ -9,6 +9,7 @@ const LABELS = {
   offline: 'Offline',
   error: 'Retry',
   expired: 'Re-login',
+  conflict: 'Merging…',
   idle: '',
 }
 

@@ -12,8 +12,11 @@
    to the server with a debounced save and pulls fresh server state
    on mount + every POLL_INTERVAL_MS.
 
-   Conflict resolution: simple last-write-wins, with the server's
-   `updated_at` used to skip pulls older than what we just pushed. */
+   Conflict resolution: optimistic concurrency. Every save tells the
+   server the `updated_at` we last observed. If the server has moved
+   on since, it refuses with HTTP 409 and we re-pull, then re-save
+   with the fresh version. This stops a stale snapshot on one device
+   from trampling fresh edits made on another device. */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -22,6 +25,7 @@ const SAVE_URL = '/api/save.php'
 
 const SAVE_DEBOUNCE_MS = 600
 const POLL_INTERVAL_MS = 15000
+const RETRY_PULL_MS = 5000
 
 /* Apply a server library to the local setters. Bails out gracefully
    if any field is missing so a stale or malformed payload can't blank
@@ -58,6 +62,7 @@ async function postJson(url, body, signal) {
     const err = new Error(detail)
     err.status = r.status
     err.code = data?.error || ''
+    err.payload = data
     throw err
   }
   return data
@@ -71,7 +76,8 @@ async function postJson(url, body, signal) {
                   setActiveListManga, setMediaMode }
 
    Returns { status, lastSavedAt, lastError } where status is one of
-   'idle' | 'loading' | 'saving' | 'synced' | 'offline' | 'error'. */
+   'idle' | 'loading' | 'saving' | 'synced' | 'offline' |
+   'error' | 'expired' | 'conflict'. */
 export function useLibrarySync({ user, state, setters, onAuthInvalid }) {
   const [status, setStatus] = useState('idle')
   const [lastSavedAt, setLastSavedAt] = useState(0)
@@ -102,11 +108,20 @@ export function useLibrarySync({ user, state, setters, onAuthInvalid }) {
   }
 
   /* Tracks the most recent server-known timestamp so we don't clobber
-     newer local edits on poll. */
+     newer local edits on poll, and so save can send it as the
+     optimistic-concurrency token. */
   const serverUpdatedAtRef = useRef(0)
-  /* True until the very first server load completes — until then we
-     skip saving so we don't push the seed library over a real one. */
-  const firstLoadDoneRef = useRef(false)
+  /* Flips to true ONLY after a successful initial pull from the
+     server. Until then, saves are blocked — otherwise a stale
+     localStorage snapshot would happily overwrite the DB. */
+  const firstPullSucceededRef = useRef(false)
+  /* Fingerprint of the last library we either successfully pushed or
+     pulled. Lets us skip no-op saves and avoid ping-ponging after
+     conflict resolution. */
+  const lastSyncedFingerprintRef = useRef('')
+  /* When a 409 conflict is being resolved, we set this to true to
+     trigger an immediate re-pull from the poll loop. */
+  const pendingPullRef = useRef(false)
 
   const userId = user ? user.id : null
   const userRaw = user ? user.raw : null
@@ -144,43 +159,92 @@ export function useLibrarySync({ user, state, setters, onAuthInvalid }) {
 
   /* ───── 1. INITIAL LOAD ────────────────────────────────────────── */
   useEffect(() => {
-    firstLoadDoneRef.current = false
-    if (!canSync) {
-      firstLoadDoneRef.current = true
-      return undefined
-    }
+    firstPullSucceededRef.current = false
+    lastSyncedFingerprintRef.current = ''
+    serverUpdatedAtRef.current = 0
+    if (!canSync) return undefined
+
     const ctl = new AbortController()
-    ;(async () => {
+    let cancelled = false
+    let retryTimer = 0
+
+    const attempt = async () => {
+      if (cancelled) return
       setStatus('loading')
       setLastError('')
       try {
         const auth = JSON.parse(authJson)
         const data = await postJson(LOAD_URL, { auth }, ctl.signal)
+        if (cancelled) return
         if (data?.library) {
           applyLibrary(data.library, settersRef.current)
-          serverUpdatedAtRef.current = data.updated_at || 0
-          setLastSavedAt(data.updated_at || 0)
+          /* Snapshot the fingerprint of what we just applied so the
+             save effect doesn't immediately echo it back. */
+          const applied = {
+            v: 1,
+            animes: Array.isArray(data.library.animes)
+              ? data.library.animes
+              : [],
+            mangas: Array.isArray(data.library.mangas)
+              ? data.library.mangas
+              : [],
+            activeListAnime:
+              typeof data.library.activeListAnime === 'string'
+                ? data.library.activeListAnime
+                : '',
+            activeListManga:
+              typeof data.library.activeListManga === 'string'
+                ? data.library.activeListManga
+                : '',
+            mediaMode:
+              data.library.mediaMode === 'manga' ? 'manga' : 'anime',
+          }
+          lastSyncedFingerprintRef.current = JSON.stringify(applied)
         }
+        serverUpdatedAtRef.current = data?.updated_at || 0
+        setLastSavedAt(serverUpdatedAtRef.current)
+        firstPullSucceededRef.current = true
         setStatus('synced')
       } catch (e) {
-        if (e.name === 'AbortError') return
+        if (e.name === 'AbortError' || cancelled) return
         setLastError(String(e.message || e))
         if (handleAuthError(e)) {
           setStatus('expired')
-        } else {
-          setStatus('offline')
+          /* No point retrying with a bad auth payload. */
+          return
         }
-      } finally {
-        firstLoadDoneRef.current = true
+        setStatus('offline')
+        /* Retry the pull soon. Saves stay blocked until we succeed,
+           so a flaky cold-start can't lead to a stale-overwrite. */
+        retryTimer = window.setTimeout(attempt, RETRY_PULL_MS)
       }
-    })()
-    return () => ctl.abort()
+    }
+
+    attempt()
+
+    /* Re-attempt as soon as the OS reports the network is back. */
+    const onOnline = () => {
+      if (!firstPullSucceededRef.current) attempt()
+    }
+    window.addEventListener('online', onOnline)
+
+    return () => {
+      cancelled = true
+      ctl.abort()
+      if (retryTimer) window.clearTimeout(retryTimer)
+      window.removeEventListener('online', onOnline)
+    }
   }, [canSync, authJson])
 
   /* ───── 2. DEBOUNCED SAVE ON STATE CHANGE ──────────────────────── */
   useEffect(() => {
     if (!canSync) return undefined
-    if (!firstLoadDoneRef.current) return undefined
+    if (!firstPullSucceededRef.current) return undefined
+    /* Skip if the local lib matches what the server already has —
+       avoids ping-ponging with the pull effect. */
+    if (libFingerprint === lastSyncedFingerprintRef.current)
+      return undefined
+
     const ctl = new AbortController()
     const t = window.setTimeout(async () => {
       setStatus('saving')
@@ -189,11 +253,16 @@ export function useLibrarySync({ user, state, setters, onAuthInvalid }) {
         const auth = JSON.parse(authJson)
         const data = await postJson(
           SAVE_URL,
-          { auth, library: lib },
+          {
+            auth,
+            library: lib,
+            expected_updated_at: serverUpdatedAtRef.current,
+          },
           ctl.signal
         )
         serverUpdatedAtRef.current =
           data?.updated_at || Math.floor(Date.now() / 1000)
+        lastSyncedFingerprintRef.current = libFingerprint
         setLastSavedAt(serverUpdatedAtRef.current)
         setStatus('synced')
       } catch (e) {
@@ -201,9 +270,23 @@ export function useLibrarySync({ user, state, setters, onAuthInvalid }) {
         setLastError(String(e.message || e))
         if (handleAuthError(e)) {
           setStatus('expired')
-        } else {
-          setStatus('error')
+          return
         }
+        if (e?.status === 409) {
+          /* Another device wrote in between. Pull the fresh version
+             and let the user decide what to do — DON'T blindly
+             re-save the stale local copy. The pull will update the
+             local state via setters; if the user has unsaved local
+             edits the next state change will trigger another save
+             which will then succeed. */
+          setStatus('conflict')
+          if (e.payload?.updated_at) {
+            serverUpdatedAtRef.current = e.payload.updated_at
+          }
+          pendingPullRef.current = true
+          return
+        }
+        setStatus('error')
       }
     }, SAVE_DEBOUNCE_MS)
     return () => {
@@ -222,16 +305,42 @@ export function useLibrarySync({ user, state, setters, onAuthInvalid }) {
       try {
         const auth = JSON.parse(authJson)
         const data = await postJson(LOAD_URL, { auth }, ctl.signal)
+        if (!alive) return
         if (
-          alive &&
           data?.library &&
           data.updated_at &&
           data.updated_at > serverUpdatedAtRef.current
         ) {
           applyLibrary(data.library, settersRef.current)
           serverUpdatedAtRef.current = data.updated_at
+          const applied = {
+            v: 1,
+            animes: Array.isArray(data.library.animes)
+              ? data.library.animes
+              : [],
+            mangas: Array.isArray(data.library.mangas)
+              ? data.library.mangas
+              : [],
+            activeListAnime:
+              typeof data.library.activeListAnime === 'string'
+                ? data.library.activeListAnime
+                : '',
+            activeListManga:
+              typeof data.library.activeListManga === 'string'
+                ? data.library.activeListManga
+                : '',
+            mediaMode:
+              data.library.mediaMode === 'manga' ? 'manga' : 'anime',
+          }
+          lastSyncedFingerprintRef.current = JSON.stringify(applied)
           setLastSavedAt(data.updated_at)
+          setStatus('synced')
+        } else if (pendingPullRef.current) {
+          /* Conflict resolution finished — server's latest already
+             matches what we have. Clear the conflict status. */
+          setStatus('synced')
         }
+        pendingPullRef.current = false
       } catch {
         /* keep the previous status; no need to flip the badge to
            red just because one poll failed. */
@@ -244,12 +353,72 @@ export function useLibrarySync({ user, state, setters, onAuthInvalid }) {
       if (document.visibilityState === 'visible') tick()
     }
     document.addEventListener('visibilitychange', onVisible)
+    /* And on network reconnect — covers the offline → online flow on
+       Android where saves were blocked while we couldn't reach the
+       server. */
+    const onOnline = () => tick()
+    window.addEventListener('online', onOnline)
     return () => {
       alive = false
       window.clearInterval(id)
       document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('online', onOnline)
     }
   }, [canSync, authJson])
+
+  /* ───── 4. CONFLICT FAST-PATH ──────────────────────────────────── */
+  /* When a save returns 409 we want to pull right away rather than
+     waiting up to POLL_INTERVAL_MS. The save handler sets
+     pendingPullRef; this effect kicks the pull when status flips to
+     'conflict'. */
+  useEffect(() => {
+    if (status !== 'conflict') return undefined
+    if (!canSync) return undefined
+    const ctl = new AbortController()
+    let cancelled = false
+    ;(async () => {
+      try {
+        const auth = JSON.parse(authJson)
+        const data = await postJson(LOAD_URL, { auth }, ctl.signal)
+        if (cancelled) return
+        if (data?.library) {
+          applyLibrary(data.library, settersRef.current)
+          serverUpdatedAtRef.current = data.updated_at || 0
+          const applied = {
+            v: 1,
+            animes: Array.isArray(data.library.animes)
+              ? data.library.animes
+              : [],
+            mangas: Array.isArray(data.library.mangas)
+              ? data.library.mangas
+              : [],
+            activeListAnime:
+              typeof data.library.activeListAnime === 'string'
+                ? data.library.activeListAnime
+                : '',
+            activeListManga:
+              typeof data.library.activeListManga === 'string'
+                ? data.library.activeListManga
+                : '',
+            mediaMode:
+              data.library.mediaMode === 'manga' ? 'manga' : 'anime',
+          }
+          lastSyncedFingerprintRef.current = JSON.stringify(applied)
+          setLastSavedAt(serverUpdatedAtRef.current)
+        }
+        pendingPullRef.current = false
+        setStatus('synced')
+      } catch (e) {
+        if (e.name === 'AbortError' || cancelled) return
+        setLastError(String(e.message || e))
+        setStatus('error')
+      }
+    })()
+    return () => {
+      cancelled = true
+      ctl.abort()
+    }
+  }, [status, canSync, authJson])
 
   return { status, lastSavedAt, lastError }
 }

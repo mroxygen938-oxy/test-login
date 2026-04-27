@@ -3,8 +3,6 @@
   "appName": "Oxygen Vault",
   "webDir": "dist",
   "server": {
-    "url": "https://oxygenvault.online",
-    "cleartext": false,
     "androidScheme": "https",
     "allowNavigation": [
       "oxygenvault.online",
@@ -23,7 +21,7 @@
   },
   "plugins": {
     "SplashScreen": {
-      "launchShowDuration": 1200,
+      "launchShowDuration": 600,
       "launchAutoHide": true,
       "backgroundColor": "#0E0B1F",
       "androidSplashResourceName": "splash",

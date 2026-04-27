@@ -30,10 +30,17 @@ function send_json(int $status, array $body): void {
 
 function apply_cors(array $cfg): void {
     $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-    if ($origin && in_array($origin, $cfg['allowed_origins'] ?? [], true)) {
+    /* Bundled Capacitor builds load the static site from
+       https://localhost / capacitor://localhost / ionic://localhost
+       and need to call this API cross-origin. Always allow those
+       three regardless of config so a working APK never gets stuck
+       behind a CORS update. */
+    $nativeOrigins = ['https://localhost', 'capacitor://localhost', 'ionic://localhost'];
+    $configured = $cfg['allowed_origins'] ?? [];
+    if ($origin && (in_array($origin, $configured, true) || in_array($origin, $nativeOrigins, true))) {
         header('Access-Control-Allow-Origin: ' . $origin);
         header('Vary: Origin');
-        header('Access-Control-Allow-Methods: POST, OPTIONS');
+        header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
         header('Access-Control-Allow-Headers: Content-Type');
         header('Access-Control-Max-Age: 600');
     }

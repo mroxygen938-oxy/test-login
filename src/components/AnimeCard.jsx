@@ -9,6 +9,7 @@ import {
   IconTrash,
 } from '../lib/icons.jsx'
 import { getListById, getModeConfig } from '../lib/lists.js'
+import { resolveImageUrl } from '../lib/apiBase.js'
 
 function AnimeCardImpl({
   anime,
@@ -31,7 +32,7 @@ function AnimeCardImpl({
     <article className="card glass" aria-label={anime.title}>
       <div className="card-media">
         {anime.image ? (
-          <img src={anime.image} alt={anime.title} loading="lazy" />
+          <img src={resolveImageUrl(anime.image)} alt={anime.title} loading="lazy" />
         ) : (
           <div className="card-media-placeholder" aria-hidden="true">
             {initial}

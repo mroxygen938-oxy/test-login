@@ -19,9 +19,10 @@
    from trampling fresh edits made on another device. */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { API_BASE } from './apiBase.js'
 
-const LOAD_URL = '/api/load.php'
-const SAVE_URL = '/api/save.php'
+const LOAD_URL = `${API_BASE}/api/load.php`
+const SAVE_URL = `${API_BASE}/api/save.php`
 
 const SAVE_DEBOUNCE_MS = 600
 const POLL_INTERVAL_MS = 15000

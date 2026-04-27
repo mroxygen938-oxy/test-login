@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { IconImage, IconPlus, IconStar, IconTrash, IconX } from '../lib/icons.jsx'
 import { uploadDataUrl } from '../lib/imageStore.js'
+import { resolveImageUrl } from '../lib/apiBase.js'
 import { getLists, getModeConfig } from '../lib/lists.js'
 
 const emptyItem = (mode) => ({
@@ -228,7 +229,7 @@ function AnimeModalInner({ initial, mediaMode, authRaw, onClose, onSave }) {
           >
             {form.image ? (
               <>
-                <img src={form.image} alt="Cover preview" />
+                <img src={resolveImageUrl(form.image)} alt="Cover preview" />
                 <div className="change-hint">Click to change cover image</div>
               </>
             ) : (

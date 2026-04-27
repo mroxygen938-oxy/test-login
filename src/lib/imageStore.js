@@ -1,10 +1,13 @@
 /* Client helper for the /api/image.php endpoint.
 
    `uploadDataUrl` POSTs a base64 data URL plus the user's Telegram
-   auth payload, returns a same-origin URL that can be used directly
-   in <img src="…">. Errors bubble so callers can show feedback. */
+   auth payload, returns a relative URL (`/api/image.php?id=…`)
+   ready to be stored in the synced library. Use `resolveImageUrl`
+   from `apiBase` when rendering. */
 
-const ENDPOINT = '/api/image.php'
+import { API_BASE } from './apiBase.js'
+
+const ENDPOINT = `${API_BASE}/api/image.php`
 
 export async function uploadDataUrl(dataUrl, authRaw, signal) {
   if (!dataUrl || !dataUrl.startsWith('data:')) {

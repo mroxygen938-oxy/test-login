@@ -30,17 +30,18 @@ const RETRY_PULL_MS = 5000
 
 /* Apply a server library to the local setters. Bails out gracefully
    if any field is missing so a stale or malformed payload can't blank
-   out a user's library. */
+   out a user's library.
+
+   IMPORTANT: we deliberately do NOT pull mediaMode / activeListAnime /
+   activeListManga from the server. Those are per-device UI
+   preferences — which tab and list you're looking at right now is
+   your business on this device, not something to be ping-pongged
+   across devices on every poll. Syncing them caused the user's
+   selection to get "auto-reset" mid-session whenever a poll landed. */
 function applyLibrary(lib, setters) {
   if (!lib || typeof lib !== 'object') return false
   if (Array.isArray(lib.animes)) setters.setAnimes(lib.animes)
   if (Array.isArray(lib.mangas)) setters.setMangas(lib.mangas)
-  if (typeof lib.activeListAnime === 'string')
-    setters.setActiveListAnime(lib.activeListAnime)
-  if (typeof lib.activeListManga === 'string')
-    setters.setActiveListManga(lib.activeListManga)
-  if (lib.mediaMode === 'anime' || lib.mediaMode === 'manga')
-    setters.setMediaMode(lib.mediaMode)
   return true
 }
 
@@ -72,9 +73,10 @@ async function postJson(url, body, signal) {
 /* Hook signature:
      useLibrarySync({ user, state, setters })
    - user.raw : the raw Telegram payload (hash + auth_date + id + …)
-   - state    : { animes, mangas, activeListAnime, activeListManga, mediaMode }
-   - setters  : { setAnimes, setMangas, setActiveListAnime,
-                  setActiveListManga, setMediaMode }
+   - state    : { animes, mangas } — only the actual library is synced
+   - setters  : { setAnimes, setMangas }
+   (mediaMode + activeList* are intentionally device-local; see comment
+   on applyLibrary above.)
 
    Returns { status, lastSavedAt, lastError } where status is one of
    'idle' | 'loading' | 'saving' | 'synced' | 'offline' |
@@ -138,23 +140,15 @@ export function useLibrarySync({ user, state, setters, onAuthInvalid }) {
 
   /* Build the combined library object + its fingerprint. We only push
      to the server when this fingerprint changes, so unrelated parent
-     re-renders don't trigger spurious saves. */
+     re-renders don't trigger spurious saves. mediaMode + activeList*
+     are intentionally NOT included — device-local preferences. */
   const lib = useMemo(
     () => ({
       v: 1,
       animes: state.animes,
       mangas: state.mangas,
-      activeListAnime: state.activeListAnime,
-      activeListManga: state.activeListManga,
-      mediaMode: state.mediaMode,
     }),
-    [
-      state.animes,
-      state.mangas,
-      state.activeListAnime,
-      state.activeListManga,
-      state.mediaMode,
-    ]
+    [state.animes, state.mangas]
   )
   const libFingerprint = useMemo(() => JSON.stringify(lib), [lib])
 
@@ -189,16 +183,6 @@ export function useLibrarySync({ user, state, setters, onAuthInvalid }) {
             mangas: Array.isArray(data.library.mangas)
               ? data.library.mangas
               : [],
-            activeListAnime:
-              typeof data.library.activeListAnime === 'string'
-                ? data.library.activeListAnime
-                : '',
-            activeListManga:
-              typeof data.library.activeListManga === 'string'
-                ? data.library.activeListManga
-                : '',
-            mediaMode:
-              data.library.mediaMode === 'manga' ? 'manga' : 'anime',
           }
           lastSyncedFingerprintRef.current = JSON.stringify(applied)
         }
@@ -322,16 +306,6 @@ export function useLibrarySync({ user, state, setters, onAuthInvalid }) {
             mangas: Array.isArray(data.library.mangas)
               ? data.library.mangas
               : [],
-            activeListAnime:
-              typeof data.library.activeListAnime === 'string'
-                ? data.library.activeListAnime
-                : '',
-            activeListManga:
-              typeof data.library.activeListManga === 'string'
-                ? data.library.activeListManga
-                : '',
-            mediaMode:
-              data.library.mediaMode === 'manga' ? 'manga' : 'anime',
           }
           lastSyncedFingerprintRef.current = JSON.stringify(applied)
           setLastSavedAt(data.updated_at)
@@ -393,16 +367,6 @@ export function useLibrarySync({ user, state, setters, onAuthInvalid }) {
             mangas: Array.isArray(data.library.mangas)
               ? data.library.mangas
               : [],
-            activeListAnime:
-              typeof data.library.activeListAnime === 'string'
-                ? data.library.activeListAnime
-                : '',
-            activeListManga:
-              typeof data.library.activeListManga === 'string'
-                ? data.library.activeListManga
-                : '',
-            mediaMode:
-              data.library.mediaMode === 'manga' ? 'manga' : 'anime',
           }
           lastSyncedFingerprintRef.current = JSON.stringify(applied)
           setLastSavedAt(serverUpdatedAtRef.current)
